@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EGO X14 Terminal</title>
+    <style>
+        body {
+            background-color: black;
+            color: red;
+            font-family: 'Consolas', 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #terminal {
+            width: 80%;
+            height: 80vh;
+            padding: 10px;
+            overflow-y: hidden; /* Hide the vertical scrollbar */
+            background-color: black;
+            white-space: pre-wrap; /* Ensure line breaks are preserved */
+            font-size: 1em; /* Increase the font size by 50% */
+        }
+        #input-container {
+            width: 80%;
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+        }
+        #input {
+            width: 100%;
+            border: 2px solid red;
+            background: black;
+            color: red;
+            font-family: 'Consolas', 'Courier New', Courier, monospace;
+            font-size: 1em;
+            padding: 10px;
+            outline: none;
+            position: relative;
+        }
+        #input::after {
+            content: '|';
+            position: absolute;
+            right: 10px;
+            animation: blink 1s step-end infinite;
+            color: red;
+        }
+        @keyframes blink {
+            from, to {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0;
+            }
+        }
+        #flash-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('{{ url_for('static', filename='img/parkerflash.png') }}') center center no-repeat;
+            background-size: cover;
+            z-index: 1000;
+        }
+        #blackout {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: black;
+            z-index: 2000;
+        }
+    </style>
+</head>
+<body>
+    <div id="terminal"></div>
+    <div id="input-container">
+        <input type="text" id="input" autocomplete="off" autofocus>
+    </div>
+    <div id="flash-overlay"></div>
+    <div id="blackout"></div>
+    <script>
+        const terminal = document.getElementById('terminal');
+        const input = document.getElementById('input');
+        const flashOverlay = document.getElementById('flash-overlay');
+        const blackout = document.getElementById('blackout');
+
+        function typeText(text, callback) {
+            let index = 0;
+            function type() {
+                if (index < text.length) {
+                    terminal.textContent += text.charAt(index);
+                    index++;
+                    terminal.scrollTop = terminal.scrollHeight; // Scroll to the bottom as we type
+                    setTimeout(type, 20); // Adjust typing speed here
+                } else {
+                    if (callback) callback();
+                }
+            }
+            type();
+        }
+
+        input.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                const userMessage = input.value;
+                if (userMessage.trim() === "") return;
+                terminal.textContent += `> ${userMessage}\n`;
+                input.value = '';
+                terminal.scrollTop = terminal.scrollHeight;
+
+                fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: userMessage }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const responseText = `\n${data.message}\n\n`;
+                    typeText(responseText, () => {
+                        terminal.scrollTop = terminal.scrollHeight;
+                    });
+                });
+            }
+        });
+
+        function flashImage(opacity, duration) {
+            flashOverlay.style.opacity = opacity;
+            flashOverlay.style.display = 'block';
+            setTimeout(() => {
+                flashOverlay.style.display = 'none';
+            }, duration);
+        }
+
+        function scheduleFlash() {
+            const randomTime = Math.random() * 19900 + 100; // Random interval between 100ms and 20000ms
+            setTimeout(() => {
+                flashImage(Math.random() * 0.9 + 0.1, Math.random() * 150 + 50); // Random opacity between 0.1 and 1, display duration between 50ms and 200ms
+                scheduleFlash();
+            }, randomTime);
+        }
+
+        function startRapidFlashes() {
+            let duration = 500; // Initial duration between flashes
+            const interval = setInterval(() => {
+                flashImage(0.2, 100); // Fixed opacity at 0.2, display duration 100ms
+                duration *= 0.9; // Reduce the interval duration to make flashes faster
+                if (duration < 50) duration = 50; // Cap the minimum interval duration at 50ms
+            }, duration);
+
+            setTimeout(() => {
+                clearInterval(interval);
+                blackout.style.display = 'block'; // Show blackout overlay
+            }, 8000); // Stop the rapid flashes and show blackout after 8 seconds
+        }
+
+        setTimeout(scheduleFlash, 40000); // Start regular flashes after 40 seconds
+        setTimeout(startRapidFlashes, 240000); // Start rapid flashes after 240 seconds
+    </script>
+</body>
+</html>
